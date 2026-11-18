@@ -36,6 +36,9 @@ jobs:
       - name: Grant Gradle wrapper permission
         run: chmod +x gradlew
 
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest --stacktrace
+
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --stacktrace
 
@@ -44,7 +47,23 @@ jobs:
           APK="app/build/outputs/apk/debug/app-debug.apk"
           AAPT2=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
           APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          TESTS=$(python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          total = failures = errors = skipped = 0
+          for path in glob.glob('app/build/test-results/testDebugUnitTest/*.xml'):
+              root = ET.parse(path).getroot()
+              total += int(root.get('tests', 0))
+              failures += int(root.get('failures', 0))
+              errors += int(root.get('errors', 0))
+              skipped += int(root.get('skipped', 0))
+          print(f"tests={total} failures={failures} errors={errors} skipped={skipped}")
+          PY
+          )
           {
+            echo "## Unit tests"
+            echo
+            echo "\`$TESTS\`"
+            echo
             echo "## Debug APK"
             echo
             echo "\`\`\`"
