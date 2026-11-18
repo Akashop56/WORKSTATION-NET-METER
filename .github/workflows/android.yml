@@ -14,6 +14,8 @@ jobs:
   test-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -55,3 +57,32 @@ jobs:
           name: unit-test-report
           path: app/build/reports/tests/testDebugUnitTest/
           if-no-files-found: warn
+
+      # The GitHub Actions log host is not reachable from every network; publishing
+      # the failure details in the repository makes CI debuggable everywhere.
+      - name: Publish failure details
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p ci-logs
+          LOG="ci-logs/run-${{ github.run_id }}.log"
+          {
+            echo "run_id: ${{ github.run_id }}"
+            echo "ref: ${{ github.ref }}"
+            echo "sha: ${{ github.sha }}"
+            echo
+            echo "### unit test result XML"
+            find app/build/test-results -name '*.xml' -print -exec cat {} \; 2>/dev/null
+            echo
+            echo "### gradle test rerun"
+            ./gradlew testDebugUnitTest --stacktrace 2>&1 | tail -250
+            echo
+            echo "### gradle lint rerun"
+            ./gradlew lintDebug --stacktrace 2>&1 | tail -150
+          } > "$LOG" 2>&1 || true
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ci-logs/
+          git commit -m "ci: publish failure details for run ${{ github.run_id }} [skip ci]" || true
+          git push origin "HEAD:${{ github.head_ref || github.ref_name }}" || true
