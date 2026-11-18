@@ -61,8 +61,9 @@ class SpeedNotificationManager(
         settings: AppSettings,
         network: NetworkState,
         localizedContext: Context,
+        preferBitmapIcon: Boolean = true,
     ): Notification = runCatching {
-        buildNotificationUnsafe(sample, settings, network, localizedContext)
+        buildNotificationUnsafe(sample, settings, network, localizedContext, preferBitmapIcon)
     }.getOrElse { t ->
         AppCrashReporter.record(t, "buildNotification")
         Log.e(TAG, "notification build failed, using fallback", t)
@@ -74,6 +75,7 @@ class SpeedNotificationManager(
         settings: AppSettings,
         network: NetworkState,
         localizedContext: Context,
+        preferBitmapIcon: Boolean,
     ): Notification {
         val showSpeed = !settings.notifyOnlyWhenConnected || network.validated
         val text = when {
@@ -90,7 +92,7 @@ class SpeedNotificationManager(
         }
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(smallIcon(sample, settings))
+            .setSmallIcon(smallIcon(sample, settings, preferBitmapIcon))
             .setContentTitle(localizedContext.getString(R.string.notification_title))
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
@@ -120,8 +122,12 @@ class SpeedNotificationManager(
      * The live rendered bitmap is the primary icon; the bundled vector is the
      * guaranteed-valid fallback if rendering or wrapping fails.
      */
-    private fun smallIcon(sample: SpeedSample, settings: AppSettings): IconCompat {
-        if (settings.accent == NotificationAccent.CLASSIC) {
+    private fun smallIcon(
+        sample: SpeedSample,
+        settings: AppSettings,
+        preferBitmapIcon: Boolean,
+    ): IconCompat {
+        if (settings.accent == NotificationAccent.CLASSIC || !preferBitmapIcon) {
             return runCatching {
                 IconCompat.createWithResource(context, R.drawable.ic_stat_netmeter)
             }.getOrElse { fallbackIcon() }

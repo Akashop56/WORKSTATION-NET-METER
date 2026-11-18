@@ -143,42 +143,56 @@ class SpeedMonitorService : Service() {
      * @return true when the platform accepted the foreground notification.
      */
     private fun promoteToForeground(sample: SpeedSample): Boolean {
-        val notification = notificationManager.buildNotification(
-            sample = sample,
-            settings = settings,
-            network = networkState,
-            localizedContext = localizedContext,
-        )
+        var lastFailure: Throwable? = null
 
-        val primary = runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                startForeground(
-                    SpeedNotificationManager.NOTIFICATION_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
-                )
-            } else {
+        // Prefer the live rendered status-bar icon, then the bundled vector, and
+        // for each try the typed overload followed by the untyped one.
+        for (preferBitmap in listOf(true, false)) {
+            val notification = notificationManager.buildNotification(
+                sample = sample,
+                settings = settings,
+                network = networkState,
+                localizedContext = localizedContext,
+                preferBitmapIcon = preferBitmap,
+            )
+
+            val typed = runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    startForeground(
+                        SpeedNotificationManager.NOTIFICATION_ID,
+                        notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+                    )
+                } else {
+                    startForeground(SpeedNotificationManager.NOTIFICATION_ID, notification)
+                }
+            }
+            if (typed.isSuccess) {
+                Log.i(TAG, "foreground accepted (bitmapIcon=$preferBitmap, typed)")
+                return true
+            }
+            typed.exceptionOrNull()?.let {
+                lastFailure = it
+                AppCrashReporter.record(it, "startForeground typed bitmapIcon=$preferBitmap")
+                Log.e(TAG, "startForeground rejected (typed, bitmapIcon=$preferBitmap)", it)
+            }
+
+            val untyped = runCatching {
                 startForeground(SpeedNotificationManager.NOTIFICATION_ID, notification)
+            }
+            if (untyped.isSuccess) {
+                Log.i(TAG, "foreground accepted (bitmapIcon=$preferBitmap, manifest type)")
+                return true
+            }
+            untyped.exceptionOrNull()?.let {
+                lastFailure = it
+                AppCrashReporter.record(it, "startForeground manifest bitmapIcon=$preferBitmap")
+                Log.e(TAG, "startForeground rejected (manifest, bitmapIcon=$preferBitmap)", it)
             }
         }
 
-        primary.onFailure {
-            AppCrashReporter.record(it, "startForeground(specialUse)")
-            Log.e(TAG, "startForeground with specialUse rejected", it)
-        }
-
-        if (primary.isSuccess) return true
-
-        // Retry with the untyped overload (it resolves to every type declared in
-        // the manifest) before giving up.
-        val fallback = runCatching {
-            startForeground(SpeedNotificationManager.NOTIFICATION_ID, notification)
-        }
-        fallback.onFailure {
-            AppCrashReporter.record(it, "startForeground(manifest)")
-            Log.e(TAG, "startForeground fallback rejected", it)
-        }
-        return fallback.isSuccess
+        Log.e(TAG, "every startForeground attempt failed", lastFailure)
+        return false
     }
 
     private fun startTicking() {
