@@ -1,7 +1,6 @@
 package com.workstation.netmeter.usage
 
 import android.app.AppOpsManager
-import android.app.usage.NetworkStats
 import android.app.usage.NetworkStatsManager
 import android.content.Context
 import android.net.ConnectivityManager
@@ -34,28 +33,22 @@ class MobileUsageReader(private val context: Context) {
         }
     }
 
-    /** @return mobile rx/tx bytes for [startMs, endMs], or null when inaccessible. */
+    /**
+     * @return mobile rx/tx bytes for [startMs, endMs], or null when inaccessible.
+     * Must be called off the main thread (the API is annotated @WorkerThread).
+     */
     fun queryMobileUsage(startMs: Long, endMs: Long): Pair<Long, Long>? {
         if (!hasUsageAccess()) return null
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return null
         return try {
             val manager = context.getSystemService<NetworkStatsManager>() ?: return null
-            val stats = manager.querySummaryForDevice(
+            val bucket = manager.querySummaryForDevice(
                 ConnectivityManager.TYPE_MOBILE,
                 null,
                 startMs,
                 endMs,
             ) ?: return null
-            var rx = 0L
-            var tx = 0L
-            val bucket = NetworkStats.Bucket()
-            while (stats.hasNextBucket()) {
-                stats.getNextBucket(bucket)
-                rx += bucket.rxBytes
-                tx += bucket.txBytes
-            }
-            stats.close()
-            rx to tx
+            bucket.rxBytes to bucket.txBytes
         } catch (t: Throwable) {
             null
         }

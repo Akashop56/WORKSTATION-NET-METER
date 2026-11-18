@@ -12,6 +12,11 @@ import com.workstation.netmeter.usage.usageDataStore
  */
 class NetMeterApp : Application() {
 
+    lateinit var settingsRepository: SettingsRepository
+        private set
+    lateinit var usageManager: DataUsageManager
+        private set
+
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -21,10 +26,6 @@ class NetMeterApp : Application() {
 
     companion object {
         lateinit var instance: NetMeterApp
-            private set
-        lateinit var settingsRepository: SettingsRepository
-            private set
-        lateinit var usageManager: DataUsageManager
             private set
     }
 }
