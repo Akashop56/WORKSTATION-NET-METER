@@ -136,6 +136,26 @@ app/src/test/java/com/workstation/netmeter/   # JVM unit tests
 
 ---
 
+## Status
+
+| Item | Value |
+| --- | --- |
+| Repository | https://github.com/Akashop56/WORKSTATION-NET-METER |
+| CI | https://github.com/Akashop56/WORKSTATION-NET-METER/actions (`Android CI`) |
+| Release | https://github.com/Akashop56/WORKSTATION-NET-METER/releases/tag/v1.0.0 |
+| APK | `app-debug.apk` (9.5 MB, debug-signed) |
+| Unit tests (CI) | `tests=29 failures=0 errors=0 skipped=0` |
+
+APK metadata verified by CI (`aapt2 dump badging` / `apksigner verify`):
+
+```
+package: name='com.workstation.netmeter' versionCode='1' versionName='1.0.0'
+minSdkVersion:'26'   targetSdkVersion:'34'   compileSdkVersion:'34'
+native-code: 'arm64-v8a' 'armeabi-v7a' 'x86' 'x86_64'
+launchable-activity: name='com.workstation.netmeter.MainActivity'
+signature: V2, CN=Android Debug (automatic debug keystore)
+```
+
 ## Build
 
 Requirements: JDK 17 and the Android SDK (platform 34).
