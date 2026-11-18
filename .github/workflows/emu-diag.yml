@@ -39,6 +39,7 @@ jobs:
 
       - name: Boot and diagnose
         run: |
+          set +e
           SDK="$ANDROID_HOME"
           export PATH="$SDK/emulator:$SDK/platform-tools:$PATH"
           mkdir -p diag
