@@ -79,7 +79,7 @@ class SpeedNotificationManager(
             )
         }
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(smallIcon)
             .setContentTitle(localizedContext.getString(R.string.notification_title))
             .setContentText(text)
@@ -98,12 +98,11 @@ class SpeedNotificationManager(
                 },
             )
             .setContentIntent(contentIntent(settings, localizedContext))
-            .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            notification.foregroundServiceBehavior = Notification.FOREGROUND_SERVICE_IMMEDIATE
+            builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
         }
-        return notification
+        return builder.build()
     }
 
     private fun contentIntent(settings: AppSettings, localizedContext: Context): PendingIntent? {

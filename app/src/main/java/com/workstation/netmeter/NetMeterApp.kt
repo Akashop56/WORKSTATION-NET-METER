@@ -3,8 +3,8 @@ package com.workstation.netmeter
 import android.app.Application
 import com.workstation.netmeter.settings.SettingsRepository
 import com.workstation.netmeter.settings.settingsDataStore
+import com.workstation.netmeter.settings.usageDataStore
 import com.workstation.netmeter.usage.DataUsageManager
-import com.workstation.netmeter.usage.usageDataStore
 
 /**
  * Application entry point. Owns the process-wide singletons so the service,
