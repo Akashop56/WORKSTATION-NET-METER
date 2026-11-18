@@ -24,6 +24,21 @@ jobs:
 
       - uses: android-actions/setup-android@v4
 
+      - name: Install emulator host libraries
+        run: |
+          set +e
+          sudo apt-get update -qq
+          for p in libpulse0 libpulse0t64 libnss3 libxcomposite1 libxcursor1 \
+                   libxi6 libasound2 libasound2t64 libgl1 libegl1 libxrandr2 \
+                   libxss1 libgtk-3-0 libatk1.0-0; do
+            sudo apt-get install -y -qq "$p" >/dev/null 2>&1
+          done
+          ldconfig
+          ls -la /dev/kvm
+          id
+          sudo chmod 666 /dev/kvm 2>&1
+          ls -la /dev/kvm
+
       - name: Install API 34 image
         run: |
           SDK="$ANDROID_HOME"
@@ -44,26 +59,18 @@ jobs:
           export PATH="$SDK/emulator:$SDK/platform-tools:$PATH"
           mkdir -p diag
           {
-            echo "## host"
-            uname -a
             echo "kvm: $(ls -la /dev/kvm 2>&1)"
-            echo "nproc: $(nproc)"
-            echo "mem:"; free -m
-            echo "ANDROID_HOME=$ANDROID_HOME"
-            echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME"
-            echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-            ls -la "$HOME/.android" 2>&1 || true
-            echo "emulator version:"; emulator -version 2>&1 | head -5
-            echo "avd list:"; emulator -list-avds 2>&1
+            echo "emulator version:"; emulator -version 2>&1 | head -3
+            echo "avds:"; emulator -list-avds 2>&1
           } > diag/host.txt 2>&1
 
           nohup emulator -avd diag -no-window -no-audio -no-boot-anim -no-snapshot \
-            -gpu swiftshader_indirect -accel off -memory 2048 -cores 4 \
+            -gpu swiftshader_indirect -accel on -memory 3072 -cores 4 \
             > diag/emulator.log 2>&1 &
           EPID=$!
           echo "pid=$EPID" >> diag/host.txt
 
-          for i in $(seq 1 9); do
+          for i in $(seq 1 6); do
             sleep 20
             {
               echo "--- tick $i ---"
@@ -75,14 +82,14 @@ jobs:
           done
 
           {
-            echo "===== emulator.log ====="
-            tail -120 diag/emulator.log
+            echo "===== emulator.log tail ====="
+            tail -80 diag/emulator.log
           } > diag/emulator-tail.txt 2>&1
 
           git config user.name "Akashop56"
           git config user.email "110674731+Akashop56@users.noreply.github.com"
           git add -f diag
-          git commit -m "chore: emulator diagnostic" || true
+          git commit -m "chore: emulator diagnostic (kvm)" || true
           git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_REF#refs/heads/}" || true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
