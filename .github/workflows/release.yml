@@ -39,11 +39,30 @@ jobs:
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --stacktrace
 
+      - name: Inspect debug APK
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          AAPT2=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          {
+            echo "## Debug APK"
+            echo
+            echo "\`\`\`"
+            "$AAPT2" dump badging "$APK"
+            echo
+            echo "Signature:"
+            "$APKSIGNER" verify --print-certs "$APK" | head -20
+            echo "\`\`\`"
+            echo
+            echo "Install: \`adb install app-debug.apk\`"
+          } > release-notes.md
+          cat release-notes.md
+
       - name: Create GitHub release
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ github.event.inputs.tag }}" \
             --title "${{ github.event.inputs.name }}" \
-            --notes "Workstation Net Meter debug build. Install with: adb install <apk>" \
+            --notes-file release-notes.md \
             app/build/outputs/apk/debug/*.apk
