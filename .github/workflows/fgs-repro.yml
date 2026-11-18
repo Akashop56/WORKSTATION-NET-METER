@@ -2,6 +2,9 @@ name: FGS repro
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - arena/d7814ba4-workstation-net-meter
 
 permissions:
   contents: write
