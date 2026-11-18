@@ -4,6 +4,7 @@ import android.app.Application
 import com.workstation.netmeter.settings.SettingsRepository
 import com.workstation.netmeter.settings.settingsDataStore
 import com.workstation.netmeter.settings.usageDataStore
+import com.workstation.netmeter.util.AppCrashReporter
 import com.workstation.netmeter.usage.DataUsageManager
 
 /**
@@ -20,6 +21,7 @@ class NetMeterApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        AppCrashReporter.install(this)
         settingsRepository = SettingsRepository(settingsDataStore)
         usageManager = DataUsageManager(usageDataStore)
     }

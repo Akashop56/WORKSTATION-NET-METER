@@ -112,4 +112,7 @@
     <string name="section_about">About</string>
     <string name="about_body">Workstation Net Meter shows your live internet speed in the Android status bar. It is free, contains no ads, no analytics and no tracking. All data stays on your device.</string>
     <string name="app_version">Version %1$s</string>
+    <string name="diagnostics_title">Diagnostics</string>
+    <string name="diagnostics_none">No errors recorded.</string>
+    <string name="diagnostics_clear">Clear error record</string>
 </resources>

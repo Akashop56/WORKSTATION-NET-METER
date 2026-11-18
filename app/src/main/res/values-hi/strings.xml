@@ -112,4 +112,7 @@
     <string name="section_about">परिचय</string>
     <string name="about_body">वर्कस्टेशन नेट मीटर एंड्रॉइड स्टेटस बार में आपकी लाइव इंटरनेट गति दिखाता है। यह मुफ़्त है, इसमें कोई विज्ञापन, कोई विश्लेषण या ट्रैकिंग नहीं है। सारा डेटा आपके डिवाइस पर रहता है।</string>
     <string name="app_version">संस्करण %1$s</string>
+    <string name="diagnostics_title">डायग्नोस्टिक्स</string>
+    <string name="diagnostics_none">कोई त्रुटि दर्ज नहीं हुई।</string>
+    <string name="diagnostics_clear">त्रुटि रिकॉर्ड साफ़ करें</string>
 </resources>

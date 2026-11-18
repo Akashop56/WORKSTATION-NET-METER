@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import com.workstation.netmeter.NetMeterApp
 import com.workstation.netmeter.network.NetworkState
 import com.workstation.netmeter.network.NetworkStateMonitor
@@ -16,6 +17,7 @@ import com.workstation.netmeter.network.TrafficStatsReader
 import com.workstation.netmeter.notification.SpeedNotificationManager
 import com.workstation.netmeter.settings.AppSettings
 import com.workstation.netmeter.settings.LocaleManager
+import com.workstation.netmeter.util.AppCrashReporter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -34,6 +36,10 @@ import kotlinx.coroutines.runBlocking
  *
  * The service is safe to start repeatedly: [onStartCommand] is idempotent and
  * the tick loop is only started when it is not already running.
+ *
+ * Every step that the platform can reject is guarded. A refused
+ * `startForeground` must leave the app alive and simply report "stopped"
+ * instead of taking the whole process down with it.
  */
 class SpeedMonitorService : Service() {
 
@@ -51,8 +57,12 @@ class SpeedMonitorService : Service() {
     @Volatile
     private var settings: AppSettings = AppSettings()
 
+    /**
+     * Starts as the service context (no disk read on the main thread) and is
+     * re-wrapped with the persisted language as soon as settings arrive.
+     */
     @Volatile
-    private var localizedContext: Context = LocaleManager.wrapWithStored(this)
+    private var localizedContext: Context = this
 
     @Volatile
     private var networkState: NetworkState = NetworkState()
@@ -69,25 +79,30 @@ class SpeedMonitorService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        localizedContext = LocaleManager.wrapWithStored(this)
         notificationManager.createChannel()
         networkMonitor.start()
 
         settingsJob = scope.launch {
-            NetMeterApp.instance.settingsRepository.settings.collect { updated ->
-                val languageChanged = updated.language != settings.language
-                settings = updated
-                if (languageChanged) {
-                    localizedContext = LocaleManager.wrap(this@SpeedMonitorService, updated.language)
+            runCatching {
+                NetMeterApp.instance.settingsRepository.settings.collect { updated ->
+                    val languageChanged = updated.language != settings.language
+                    settings = updated
+                    if (languageChanged || localizedContext === this@SpeedMonitorService) {
+                        localizedContext = runCatching {
+                            LocaleManager.wrap(this@SpeedMonitorService, updated.language)
+                        }.getOrDefault(this@SpeedMonitorService)
+                    }
                 }
-            }
+            }.onFailure { AppCrashReporter.record(it, "settings collect") }
         }
 
         scope.launch {
-            networkMonitor.state.collect { state ->
-                networkState = state
-                SpeedStateHolder.updateNetwork(state)
-            }
+            runCatching {
+                networkMonitor.state.collect { state ->
+                    networkState = state
+                    SpeedStateHolder.updateNetwork(state)
+                }
+            }.onFailure { AppCrashReporter.record(it, "network collect") }
         }
     }
 
@@ -97,8 +112,14 @@ class SpeedMonitorService : Service() {
             return START_NOT_STICKY
         }
 
-        notificationManager.createChannel()
-        startForegroundWith(sample = SpeedSample.ZERO)
+        // Must happen first: the platform gives a foreground service a short
+        // deadline to call startForeground().
+        if (!promoteToForeground(SpeedSample.ZERO)) {
+            Log.e(TAG, "service could not enter the foreground; stopping")
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
         updateServiceState()
         startTicking()
         return START_STICKY
@@ -116,11 +137,58 @@ class SpeedMonitorService : Service() {
         super.onDestroy()
     }
 
+    /**
+     * Promotes the service to the foreground with the typed API on Android 14+.
+     *
+     * @return true when the platform accepted the foreground notification.
+     */
+    private fun promoteToForeground(sample: SpeedSample): Boolean {
+        val notification = notificationManager.buildNotification(
+            sample = sample,
+            settings = settings,
+            network = networkState,
+            localizedContext = localizedContext,
+        )
+
+        val primary = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    SpeedNotificationManager.NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+                )
+            } else {
+                startForeground(SpeedNotificationManager.NOTIFICATION_ID, notification)
+            }
+        }
+
+        primary.onFailure {
+            AppCrashReporter.record(it, "startForeground(specialUse)")
+            Log.e(TAG, "startForeground with specialUse rejected", it)
+        }
+
+        if (primary.isSuccess) return true
+
+        // Retry with the untyped overload (it resolves to every type declared in
+        // the manifest) before giving up.
+        val fallback = runCatching {
+            startForeground(SpeedNotificationManager.NOTIFICATION_ID, notification)
+        }
+        fallback.onFailure {
+            AppCrashReporter.record(it, "startForeground(manifest)")
+            Log.e(TAG, "startForeground fallback rejected", it)
+        }
+        return fallback.isSuccess
+    }
+
     private fun startTicking() {
         if (tickJob?.isActive == true) return
         tickJob = scope.launch {
             while (true) {
-                tickOnce()
+                runCatching { tickOnce() }.onFailure {
+                    AppCrashReporter.record(it, "tick")
+                    Log.e(TAG, "tick failed", it)
+                }
                 delay(settings.samplingIntervalMs)
             }
         }
@@ -172,28 +240,10 @@ class SpeedMonitorService : Service() {
                     pendingTx,
                     settings.startingHour,
                 )
-            }
+            }.onFailure { AppCrashReporter.record(it, "flushUsage") }
         }
         pendingRx = 0L
         pendingTx = 0L
-    }
-
-    private fun startForegroundWith(sample: SpeedSample) {
-        val notification = notificationManager.buildNotification(
-            sample = sample,
-            settings = settings,
-            network = networkState,
-            localizedContext = localizedContext,
-        )
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                SpeedNotificationManager.NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
-            )
-        } else {
-            startForeground(SpeedNotificationManager.NOTIFICATION_ID, notification)
-        }
     }
 
     private fun updateServiceState() {
@@ -222,6 +272,7 @@ class SpeedMonitorService : Service() {
     companion object {
         const val ACTION_STOP = "com.workstation.netmeter.action.STOP"
 
+        private const val TAG = "SpeedMonitorService"
         private const val USAGE_FLUSH_INTERVAL_MS = 10_000L
         private const val UNSET = Long.MIN_VALUE
     }

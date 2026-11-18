@@ -52,6 +52,7 @@ import com.workstation.netmeter.ui.components.SettingAction
 import com.workstation.netmeter.ui.components.SettingRadioGroup
 import com.workstation.netmeter.ui.components.SettingSwitch
 import com.workstation.netmeter.usage.MobileUsageReader
+import com.workstation.netmeter.util.AppCrashReporter
 import com.workstation.netmeter.util.Permissions
 import com.workstation.netmeter.util.SpeedFormatter
 import com.workstation.netmeter.util.SpeedUnit
@@ -74,6 +75,7 @@ fun SettingsScreen(
     val mobileUsageReader = remember { MobileUsageReader(context) }
     var usageAccessGranted by remember { mutableStateOf(mobileUsageReader.hasUsageAccess()) }
     var batteryExempt by remember { mutableStateOf(Permissions.isIgnoringBatteryOptimizations(context)) }
+    var lastError by remember { mutableStateOf(AppCrashReporter.lastError(context)) }
 
     val tapLabels = mapOf(
         TapAction.OPEN_APP to stringResource(R.string.tap_open_app),
@@ -336,6 +338,37 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
+
+            // Last recorded failure, so a platform rejection (foreground service,
+            // notification) can be read off the screen instead of a crash dialog.
+            SectionHeader(stringResource(R.string.diagnostics_title))
+            val recordedError = lastError
+            if (recordedError == null) {
+                Text(
+                    text = stringResource(R.string.diagnostics_none),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            } else {
+                Text(
+                    text = recordedError,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+                TextButton(
+                    onClick = {
+                        AppCrashReporter.clear(context)
+                        lastError = AppCrashReporter.lastError(context)
+                    },
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                ) {
+                    Text(stringResource(R.string.diagnostics_clear))
+                }
+            }
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
