@@ -10,6 +10,7 @@ import com.workstation.netmeter.service.ServiceState
 import com.workstation.netmeter.service.SpeedServiceController
 import com.workstation.netmeter.service.SpeedStateHolder
 import com.workstation.netmeter.settings.AppSettings
+import com.workstation.netmeter.util.AppCrashReporter
 import com.workstation.netmeter.usage.DataUsage
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -73,7 +74,12 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     /** Starts or stops the foreground monitor and persists the user's choice. */
     fun setMonitoring(enabled: Boolean) {
         viewModelScope.launch {
-            app.settingsRepository.setMonitoringEnabled(enabled)
+            // A failed preference write must not stop the service from starting,
+            // and must never escape as an uncaught coroutine exception.
+            runCatching { app.settingsRepository.setMonitoringEnabled(enabled) }
+                .onFailure {
+                    AppCrashReporter.record(it, "setMonitoringEnabled")
+                }
             if (enabled) {
                 SpeedServiceController.start(getApplication())
             } else {
