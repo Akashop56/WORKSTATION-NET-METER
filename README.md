@@ -56,7 +56,7 @@ notification small icon.
 | Language | English, हिन्दी, Hinglish |
 | Notification Accent | System Default (live rendered icon) / Classic Icon |
 | Theme | System Default / Dark / Light |
-| Advanced | Network & Wi-Fi information, sampling interval, start on boot, battery optimisation, Usage Access |
+| Advanced | Network & Wi-Fi information, sampling interval, start on boot, battery optimisation, Usage Access, diagnostics (last recorded error) |
 
 ### Data usage
 - Usage is accumulated from the device traffic counters and stored with Jetpack
